@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./backend/uploads:/app/uploads
+      # This ensures the database file is persisted in the right location
+      - ./backend/assignment_app.db:/app/assignment_app.db
+    environment:
+      - DATABASE_URL=sqlite:///./assignment_app.db
+    restart: always
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: always
+
+volumes:
+  uploads:
