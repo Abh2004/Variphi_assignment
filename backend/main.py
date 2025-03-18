@@ -6,8 +6,14 @@ from fastapi.responses import JSONResponse
 from routes import auth, users, subjects, assignments, comments
 from models import Base
 from database import engine
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Create all tables in the database
+# In production on Render, we'll always need to ensure tables exist
 Base.metadata.create_all(bind=engine)
 
 # Create uploads directory
@@ -27,8 +33,12 @@ origins = [
     "http://localhost:80",
     "http://localhost:3000",
     "http://frontend",
-    "*"  # Only use this for debugging
 ]
+
+# Add production domain if available
+if os.getenv("FRONTEND_URL"):
+    origins.append(os.getenv("FRONTEND_URL"))
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -53,9 +63,26 @@ def read_root():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy"}
+    # You could add DB connection check here
+    try:
+        # Just to check database connection
+        from sqlalchemy import text
+        from database import SessionLocal
+        
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+        db_status = "connected"
+    except Exception as e:
+        db_status = f"error: {str(e)}"
+    
+    return {
+        "status": "healthy",
+        "database": db_status,
+        "version": "1.0.0"
+    }
 
-# In main.py, add a custom exception handler
+# Exception handlers
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request, exc):
     return JSONResponse(
@@ -65,6 +92,7 @@ async def http_exception_handler(request, exc):
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request, exc):
+    # In production, you might want to log the exception here
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"detail": "An internal server error occurred"}
@@ -72,4 +100,9 @@ async def general_exception_handler(request, exc):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(
+        "main:app", 
+        host="0.0.0.0", 
+        port=int(os.getenv("PORT", "8000")), 
+        reload=os.getenv("DEBUG", "False").lower() in ("true", "1", "t")
+    )

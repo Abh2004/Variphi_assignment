@@ -42,14 +42,17 @@ def register_user(user_data: UserCreate, db: Session = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Registration failed. Please try again."
         )
+
+
+
 @router.post("/token")
 def login_for_access_token(
+    response: Response,  # Add this parameter
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
     user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
-        # Return a Response object directly instead of raising an exception
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
             content={"detail": "Incorrect email or password"},
@@ -62,13 +65,26 @@ def login_for_access_token(
         expires_delta=access_token_expires
     )
     
-    # Fixed return statement with opening curly brace
+    # Set the cookie
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,  # Prevents JavaScript access
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        expires=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        samesite="lax",  # Helps prevent CSRF
+        secure=False  # Set to True in production with HTTPS
+    )
+    
+    # Return response
     return {
         "access_token": access_token,
         "token_type": "bearer",
         "user_role": user.role,
         "user_id": user.id
     }
+
+
 @router.post("/logout")
 def logout(response: Response):
     response.delete_cookie(key="access_token")
